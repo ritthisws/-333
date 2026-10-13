@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบพิกัดฉาก 3D | คณิตศาสตร์ ม.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+:root{
+  --bg1:#0b1030;--bg2:#1a1147;
+  --glass:rgba(255,255,255,.07);--glass2:rgba(255,255,255,.12);--line:rgba(255,255,255,.16);
+  --tx:#eef1ff;--mut:#a3acd9;
+  --pink:#f43f5e;--pink2:#ec4899;--rose:#fb7185;--cyan:#22d3ee;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--violet:#a78bfa;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  font-family:'Prompt',system-ui,sans-serif;color:var(--tx);overflow:hidden;
+  background:
+    radial-gradient(1100px 700px at 12% 8%,rgba(99,70,255,.38),transparent 62%),
+    radial-gradient(900px 640px at 92% 92%,rgba(236,72,153,.30),transparent 60%),
+    linear-gradient(160deg,var(--bg1),var(--bg2));
+}
+.hidden{display:none!important}
+#app{
+  display:grid;grid-template-columns:minmax(0,1fr) clamp(390px,32vw,480px);gap:16px;
+  height:100vh;height:100dvh;padding:16px;
+}
+#stage{
+  position:relative;border-radius:30px;overflow:hidden;min-height:0;
+  border:1px solid var(--line);
+  background:
+    radial-gradient(760px 520px at 50% 38%,rgba(130,100,255,.22),transparent 70%),
+    rgba(6,8,30,.55);
+  box-shadow:0 30px 80px -20px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.1);
+}
+#gl{position:absolute;inset:0}
+#gl canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;cursor:grab}
+#gl canvas.plot{cursor:crosshair}
+#gl canvas:active{cursor:grabbing}
+.fatal{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--mut)}
+.chip{
+  position:absolute;z-index:5;display:flex;align-items:center;gap:10px;padding:9px 16px;border-radius:999px;
+  background:rgba(14,16,48,.55);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);
+  border:1px solid var(--line);font-size:13px;box-shadow:0 8px 24px -10px rgba(0,0,0,.5);
+}
+.chip b{font-weight:600}
+.chip small{color:var(--mut);font-size:12px}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--pink),var(--pink2));box-shadow:0 0 12px var(--pink)}
+#titleChip{top:16px;left:16px}
+#hoverRead{top:16px;right:16px;font-variant-numeric:tabular-nums;font-weight:500;color:#fff;min-width:128px;justify-content:center}
+#hint{
+  position:absolute;z-index:4;top:64px;left:16px;max-width:300px;font-size:12px;line-height:1.55;color:var(--mut);
+  padding:10px 14px;border-radius:16px;background:rgba(14,16,48,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--line);transition:opacity .8s,transform .8s;
+}
+#hint.faded{opacity:0;transform:translateY(-6px);pointer-events:none}
+#hotspots{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+.hs{
+  position:absolute;left:0;top:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
+  border:2px solid #fff;color:#fff;font:700 12px 'Prompt',sans-serif;display:grid;place-items:center;cursor:pointer;pointer-events:auto;
+  background:linear-gradient(135deg,var(--pink),var(--pink2));animation:pulse 2.2s infinite;
+  transition:transform .2s;
+}
+.hs:hover{transform:scale(1.2)}
+.hs::after{
+  content:attr(data-t);position:absolute;bottom:38px;left:50%;transform:translateX(-50%) translateY(4px);white-space:nowrap;
+  padding:5px 11px;border-radius:999px;background:rgba(14,16,48,.9);border:1px solid var(--line);font-size:11px;font-weight:500;
+  opacity:0;pointer-events:none;transition:all .2s;
+}
+.hs:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(244,63,94,.65)}70%{box-shadow:0 0 0 14px rgba(244,63,94,0)}100%{box-shadow:0 0 0 0 rgba(244,63,94,0)}}
+#card{
+  position:absolute;z-index:6;left:16px;bottom:84px;width:min(350px,calc(100% - 32px));padding:18px 18px 16px;border-radius:24px;
+  background:linear-gradient(160deg,rgba(40,34,110,.82),rgba(18,16,56,.86));
+  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(255,255,255,.2);box-shadow:0 24px 60px -16px rgba(0,0,0,.7);
+  opacity:0;transform:translateY(18px) scale(.97);pointer-events:none;transition:opacity .35s,transform .35s cubic-bezier(.2,.9,.3,1.2);
+}
+#card.show{opacity:1;transform:none;pointer-events:auto}
+#card .tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 11px;border-radius:999px;background:rgba(244,63,94,.2);color:#fecdd3;border:1px solid rgba(244,63,94,.4)}
+#card h3{margin:10px 0 6px;font-size:18px;font-weight:600}
+#card p{margin:0;font-size:13.5px;line-height:1.65;color:#d5dafc}
+#card .eg{margin-top:10px;padding:9px 12px;border-radius:14px;background:rgba(255,255,255,.08);font-size:13px;color:#fff}
+#cardClose{position:absolute;right:12px;top:12px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;font-size:16px;cursor:pointer}
+#cardClose:hover{background:rgba(255,255,255,.18)}
+#cardAct{margin-top:12px;width:100%}
+#tools{
+  position:absolute;z-index:5;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px;padding:6px;border-radius:999px;
+  background:rgba(14,16,48,.6);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);
+  max-width:calc(100% - 24px);overflow-x:auto;
+}
+.tool{
+  border:0;background:transparent;color:var(--tx);font:500 12.5px 'Prompt',sans-serif;padding:9px 15px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  transition:background .2s,color .2s;
+}
+.tool:hover{background:rgba(255,255,255,.12)}
+.tool.on{background:linear-gradient(135deg,var(--pink),var(--pink2));color:#fff;box-shadow:0 6px 18px -6px rgba(244,63,94,.8)}
+#panel{
+  display:flex;flex-direction:column;min-height:0;border-radius:30px;overflow:hidden;
+  background:var(--glass);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);
+  border:1px solid var(--line);box-shadow:0 30px 80px -24px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);
+}
+#panel header{
+  position:relative;padding:22px 24px 16px;overflow:hidden;
+  background:linear-gradient(120deg,rgba(244,63,94,.85),rgba(236,72,153,.75));
+}
+#panel header::before,#panel header::after{content:"";position:absolute;border-radius:50%;background:#fff;opacity:.12}
+#panel header::before{width:130px;height:130px;right:-30px;top:-50px}
+#panel header::after{width:90px;height:90px;left:-24px;bottom:-44px}
+#panel h1{position:relative;margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em}
+#panel header p{position:relative;margin:2px 0 0;font-size:12.5px;color:#ffe4ea}
+#tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:8px;margin:12px 14px 0;border-radius:999px;background:rgba(0,0,0,.22);border:1px solid var(--line)}
+#tabs button{
+  border:0;background:transparent;color:var(--mut);font:600 12.5px 'Prompt',sans-serif;padding:10px 4px;border-radius:999px;cursor:pointer;transition:all .25s;
+}
+#tabs button:hover{color:#fff}
+#tabs button.active{background:linear-gradient(135deg,var(--pink),var(--pink2));color:#fff;box-shadow:0 6px 18px -6px rgba(244,63,94,.85)}
+#panelBody{flex:1;min-height:0;overflow-y:auto;padding:16px 16px 22px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}
+#panelBody::-webkit-scrollbar{width:6px}
+#panelBody::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:6px}
+.tab{animation:fadeUp .45s cubic-bezier(.2,.8,.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.card{padding:16px;border-radius:24px;background:rgba(255,255,255,.07);border:1px solid var(--line);margin-bottom:12px}
+.card h2{margin:0 0 4px;font-size:15px;font-weight:600}
+.card small,.lbl{color:var(--mut);font-size:12px}
+.sub{margin:0 0 12px;font-size:12.5px;color:var(--mut);line-height:1.55}
+.topic{
+  width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:12px 14px;margin-bottom:8px;border-radius:20px;cursor:pointer;color:var(--tx);
+  background:rgba(255,255,255,.06);border:1px solid var(--line);font-family:inherit;transition:all .25s;
+}
+.topic:hover{background:rgba(255,255,255,.12);transform:translateX(3px)}
+.topic.active{background:linear-gradient(135deg,rgba(244,63,94,.35),rgba(236,72,153,.25));border-color:rgba(251,113,133,.7)}
+.topic .bd{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:linear-gradient(135deg,var(--pink),var(--pink2))}
+.topic b{display:block;font-size:14px;font-weight:600}
+.topic span{font-size:12px;color:var(--mut)}
+.steps{display:grid;gap:8px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;display:flex;gap:10px;font-size:13px;line-height:1.55;color:#d5dafc}
+.steps li::before{content:counter(s);flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:rgba(34,211,238,.2);color:#a5f3fc}
+.readout{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#coordVal{font-size:34px;font-weight:800;letter-spacing:.04em;background:linear-gradient(135deg,#fb7185,#f9a8d4);-webkit-background-clip:text;background-clip:text;color:transparent;font-variant-numeric:tabular-nums}
+#coordVal.q{background:none;color:var(--mut);-webkit-text-fill-color:var(--mut)}
+.badge{display:inline-block;margin-top:4px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(255,255,255,.1);border:1px solid var(--line)}
+.round{
+  flex:none;width:54px;height:54px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;cursor:pointer;color:#fecdd3;
+  background:rgba(244,63,94,.22);transition:all .2s;
+}
+.round:hover{background:rgba(244,63,94,.38);transform:scale(1.06)}
+.round.off{background:rgba(255,255,255,.1);color:var(--mut)}
+.round svg{width:26px;height:26px}
+.slider-row{margin-bottom:12px}
+.slider-row:last-child{margin-bottom:0}
+.slider-row .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;font-weight:500}
+.slider-row output{font-weight:700;color:#fda4af;font-variant-numeric:tabular-nums}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.1);color:#fff;font-size:18px;cursor:pointer;line-height:1}
+.stepper button:hover{background:rgba(255,255,255,.2)}
+input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:rgba(255,255,255,.18);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--pink),var(--pink2));border:2px solid #fff;cursor:pointer;box-shadow:0 0 14px rgba(244,63,94,.8)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--pink);border:2px solid #fff;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.qchip{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;font:600 13px 'Prompt',sans-serif;padding:7px 14px;border-radius:999px;cursor:pointer;transition:all .2s;font-variant-numeric:tabular-nums}
+.qchip:hover{background:linear-gradient(135deg,var(--pink),var(--pink2));border-color:transparent;transform:translateY(-2px)}
+.btn{
+  border:1px solid var(--line);background:rgba(255,255,255,.1);color:#fff;font:600 14px 'Prompt',sans-serif;padding:13px 18px;border-radius:999px;cursor:pointer;
+  transition:all .22s;display:inline-flex;justify-content:center;align-items:center;gap:8px;
+}
+.btn:hover{background:rgba(255,255,255,.2);transform:translateY(-1px)}
+.btn.primary{border-color:transparent;background:linear-gradient(135deg,var(--pink),var(--pink2));box-shadow:0 10px 24px -10px rgba(244,63,94,.9)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:10px 16px;font-size:13px}
+.btn-row{display:flex;gap:10px;margin-top:12px}
+.btn-row .btn{flex:1}
+.select-wrap{position:relative;margin-bottom:12px}
+.select-wrap select{
+  width:100%;appearance:none;-webkit-appearance:none;padding:14px 44px 14px 20px;border-radius:999px;font:600 15px 'Prompt',sans-serif;color:#fff;
+  background:rgba(255,255,255,.1);border:1px solid var(--line);outline:none;cursor:pointer;
+}
+.select-wrap select:focus{border-color:var(--rose)}
+.select-wrap select option{color:#111}
+.select-wrap::after{content:"";position:absolute;right:20px;top:50%;width:8px;height:8px;border-right:2px solid var(--rose);border-bottom:2px solid var(--rose);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.table{display:flex;flex-direction:column;gap:10px;overflow-x:auto;padding-bottom:2px}
+.trow{display:flex;align-items:center;gap:8px;min-width:max-content;justify-content:center}
+.axis-tag{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:16px}
+.axis-tag.x{background:rgba(251,113,133,.25);color:#fecdd3}
+.axis-tag.y{background:rgba(34,211,238,.22);color:#a5f3fc}
+.val-box,.math-input{width:42px;height:42px;border-radius:50%;text-align:center;font:600 15px 'Prompt',sans-serif}
+.val-box{display:grid;place-items:center;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.14);color:#d5dafc}
+.math-input{background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.2);color:#fff;outline:none;transition:all .2s;-moz-appearance:textfield;appearance:textfield;padding:0}
+.math-input::-webkit-inner-spin-button,.math-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.math-input:focus{border-color:var(--rose);box-shadow:0 0 0 3px rgba(244,63,94,.28)}
+.math-input.correct{border-color:var(--ok);background:rgba(52,211,153,.2);color:#a7f3d0}
+.math-input.incorrect{border-color:var(--bad);background:rgba(248,113,113,.2);color:#fecaca}
+.eqline{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px}
+.eqline .eq{font-size:20px;font-weight:700;color:#fda4af}
+.count{font-size:12px;padding:5px 12px;border-radius:999px;background:rgba(96,165,250,.2);color:#bfdbfe;border:1px solid rgba(96,165,250,.4);white-space:nowrap}
+.fb{margin-top:12px;padding:14px;border-radius:18px;text-align:center;font-size:14px;font-weight:600;animation:pop .4s cubic-bezier(.2,1.2,.4,1)}
+.fb.ok{background:rgba(52,211,153,.18);color:#a7f3d0;border:1px solid rgba(52,211,153,.4)}
+.fb.mid{background:rgba(251,191,36,.16);color:#fde68a;border:1px solid rgba(251,191,36,.4)}
+.fb.bad{background:rgba(248,113,113,.16);color:#fecaca;border:1px solid rgba(248,113,113,.4)}
+@keyframes pop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.q{padding:14px 14px 12px;margin-bottom:12px;border-radius:22px;background:rgba(255,255,255,.06);border:1px solid var(--line)}
+.qt{margin:0 0 10px;font-weight:600;font-size:14px;line-height:1.5;display:flex;gap:10px}
+.qn{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;background:linear-gradient(135deg,var(--pink),var(--pink2))}
+.opts{display:grid;gap:6px}
+.opt{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:16px;cursor:pointer;font-size:13.5px;color:#dfe3ff;border:1px solid transparent;background:rgba(255,255,255,.05);transition:all .2s}
+.opt:hover{background:rgba(255,255,255,.12)}
+.opt input{accent-color:#f43f5e;width:16px;height:16px;margin:0}
+.opt .mk{font-weight:700;color:var(--mut)}
+.opt.ok{background:rgba(52,211,153,.2);border-color:rgba(52,211,153,.55);color:#d1fae5}
+.opt.bad{background:rgba(248,113,113,.2);border-color:rgba(248,113,113,.55);color:#fee2e2}
+.link{margin-top:10px;border:0;background:rgba(34,211,238,.16);color:#a5f3fc;font:500 12.5px 'Prompt',sans-serif;padding:7px 14px;border-radius:999px;cursor:pointer}
+.link:hover{background:rgba(34,211,238,.28)}
+.why{margin-top:10px;padding:10px 12px;border-radius:14px;font-size:12.5px;line-height:1.6;background:rgba(52,211,153,.12);color:#a7f3d0;animation:pop .4s}
+.result{display:flex;align-items:center;gap:16px;margin-top:12px;padding:16px;border-radius:22px;animation:pop .45s cubic-bezier(.2,1.2,.4,1)}
+.result.ok{background:rgba(52,211,153,.18);border:1px solid rgba(52,211,153,.45)}
+.result.mid{background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.45)}
+.result.bad{background:rgba(248,113,113,.16);border:1px solid rgba(248,113,113,.45)}
+.ring{flex:none;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:18px;background:conic-gradient(var(--c) calc(var(--p)*1%),rgba(255,255,255,.12) 0)}
+.ring span{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:#1a1647}
+.result b{display:block;font-size:15px}
+.result small{color:#d5dafc}
+@media (max-width:900px){
+  #app{grid-template-columns:1fr;grid-template-rows:46vh minmax(0,1fr);grid-template-rows:46dvh minmax(0,1fr);gap:10px;padding:10px}
+  #stage,#panel{border-radius:24px}
+  #hint{display:none}
+  #hoverRead{display:none}
+  #card{bottom:70px}
+  #titleChip{top:10px;left:10px;padding:7px 12px}
+  #tools{bottom:10px}
+  .tool{padding:8px 11px;font-size:12px}
+}
+@media (max-width:480px){
+  #titleChip small{display:none}
+  #tabs button{font-size:11.5px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="stage">
+    <div id="gl"></div>
+    <div id="hotspots"></div>
+    <div class="chip" id="titleChip"><span class="dot"></span><b>ระบบพิกัดฉาก 3D</b><small>คณิตศาสตร์ ม.1</small></div>
+    <div class="chip" id="hoverRead">x: –  y: –</div>
+    <div id="hint">ลากเมาส์เพื่อ <b>หมุน</b> · คลิกขวาลากเพื่อ <b>แพน</b> · ล้อเมาส์เพื่อ <b>ซูม</b><br>บนแท็บเล็ต: นิ้วเดียวหมุน · สองนิ้วซูมและแพน · แตะกระดานเพื่อวางจุด</div>
+    <div id="card">
+      <button id="cardClose" aria-label="ปิด">✕</button>
+      <span class="tag" id="cardTag"></span>
+      <h3 id="cardTitle"></h3>
+      <p id="cardBody"></p>
+      <div class="eg" id="cardEg"></div>
+      <button class="btn primary sm" id="cardAct">วางจุดตัวอย่างบนกราฟ</button>
+    </div>
+    <div id="tools">
+      <button class="tool" id="btnHome">⟲ รีเซ็ตมุมมอง</button>
+      <button class="tool" id="btnTop">⬒ มุมมองด้านบน</button>
+      <button class="tool" id="btnSpin">↻ หมุนอัตโนมัติ</button>
+      <button class="tool on" id="btnHs">● จุดอธิบาย</button>
+    </div>
+  </section>
+
+  <aside id="panel">
+    <header>
+      <h1>ระบบพิกัดฉาก</h1>
+      <p>สื่อการสอน 3D Interactive · คณิตศาสตร์ ม.1</p>
+    </header>
+    <nav id="tabs">
+      <button data-tab="learn" class="active">เรียนรู้</button>
+      <button data-tab="free">พล็อตอิสระ</button>
+      <button data-tab="exercise">แบบฝึกหัด</button>
+      <button data-tab="quiz">ทดสอบ</button>
+    </nav>
+    <div id="panelBody">
+
+      <section class="tab" id="tab-learn">
+        <p class="sub">แตะหัวข้อด้านล่าง หรือคลิกจุดสีชมพูบนกระดาน 3D เพื่อดูคำอธิบายและให้กล้องบินไปยังตำแหน่งนั้น</p>
+        <div id="topicList"></div>
+        <div class="card" style="margin-top:14px">
+          <h2>วิธีอ่านพิกัด (x, y)</h2>
+          <ol class="steps">
+            <li>เริ่มจากจุดกำเนิด O(0, 0)</li>
+            <li>ดูค่า x ก่อน: บวกให้เดินไปทางขวา ลบให้เดินไปทางซ้าย</li>
+            <li>ดูค่า y ต่อ: บวกให้เดินขึ้น ลบให้เดินลง</li>
+            <li>ตำแหน่งที่หยุดคือจุดที่ต้องการ</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="tab hidden" id="tab-free">
+        <div class="card readout">
+          <div>
+            <small>พิกัดปัจจุบัน P(x, y)</small>
+            <div id="coordVal">(-4, 5)</div>
+            <span class="badge" id="quadBadge"></span>
+          </div>
+          <button class="round" id="eyeBtn" title="ซ่อน/แสดงพิกัด"><svg id="eyeSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor"></svg></button>
+        </div>
+        <div class="card">
+          <div class="slider-row">
+            <div class="top"><span>ค่า x (แนวนอน)</span><output id="xOut">-4</output></div>
+            <div class="stepper"><button id="xMinus">−</button><input type="range" id="xRange" min="-10" max="10" step="1" value="-4"><button id="xPlus">+</button></div>
+          </div>
+          <div class="slider-row">
+            <div class="top"><span>ค่า y (แนวตั้ง)</span><output id="yOut">5</output></div>
+            <div class="stepper"><button id="yMinus">−</button><input type="range" id="yRange" min="-10" max="10" step="1" value="5"><button id="yPlus">+</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>จุดลัดตัวอย่าง</h2>
+          <small>กดเพื่อย้ายจุดไปยังพิกัดนั้น หรือคลิกบนกระดาน 3D ได้เลย</small>
+          <div class="chips" id="quick"></div>
+        </div>
+        <div class="card">
+          <h2>เกมทายพิกัด</h2>
+          <small>กดปุ่มรูปตาเพื่อซ่อนพิกัด แล้วทายจากตำแหน่งบนกราฟว่า P คือเท่าไร จากนั้นกดอีกครั้งเพื่อตรวจคำตอบ</small>
+        </div>
+      </section>
+
+      <section class="tab hidden" id="tab-exercise">
+        <div class="select-wrap"><select id="exSelect"></select></div>
+        <div class="card">
+          <div class="eqline"><div class="eq" id="exEq"></div><span class="count" id="exCount">พล็อตแล้ว 0/5 จุด</span></div>
+          <div class="table">
+            <div class="trow"><div class="axis-tag x">x</div><div id="rowX" class="trow"></div></div>
+            <div class="trow"><div class="axis-tag y">y</div><div id="rowY" class="trow"></div></div>
+          </div>
+          <div class="legend"><span><i style="background:#60a5fa"></i>จุดของคุณ</span><span><i style="background:#34d399"></i>ถูกต้อง</span><span><i style="background:#fbbf24"></i>ไม่ตรงเฉลย</span><span><i style="background:#f43f5e"></i>จุดเฉลย</span></div>
+        </div>
+        <p class="sub">เติมค่าในตารางให้ครบ แล้วคลิกบนกระดาน 3D เพื่อพล็อตจุด (คลิกซ้ำที่เดิมเพื่อลบจุด)</p>
+        <div class="btn-row">
+          <button class="btn" id="exCheck">ตรวจคำตอบ</button>
+          <button class="btn primary" id="exReveal">เฉลย</button>
+        </div>
+        <div class="btn-row"><button class="btn sm" id="exClear">ล้างจุดที่พล็อต</button></div>
+        <div id="exFb"></div>
+      </section>
+
+      <section class="tab hidden" id="tab-quiz">
+        <p class="sub">เลือกคำตอบแล้วกดตรวจ ข้อที่มีปุ่ม “ดูจุดบนกราฟ 3D” จะพาจุดไปวางบนกระดานให้ดูได้</p>
+        <div id="quizBox"></div>
+        <div class="btn-row">
+          <button class="btn" id="qCheck">ตรวจคำตอบ</button>
+          <button class="btn primary" id="qReveal">เฉลย</button>
+        </div>
+        <div class="btn-row"><button class="btn sm" id="qReset">ทำใหม่อีกครั้ง</button></div>
+        <div id="qResult"></div>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var $=function(id){return document.getElementById(id);};
+var glHost=$('gl');
+
+if(!window.THREE||!THREE.OrbitControls){
+  glHost.innerHTML='<div class="fatal">ไม่สามารถโหลดไลบรารี Three.js ได้<br>กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วรีเฟรชหน้านี้</div>';
+  return;
+}
+
+var renderer;
+try{
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+}catch(err){
+  glHost.innerHTML='<div class="fatal">เบราว์เซอร์นี้ไม่รองรับ WebGL<br>กรุณาลองเปิดด้วย Chrome, Edge หรือ Safari เวอร์ชันล่าสุด</div>';
+  return;
+}
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+glHost.appendChild(renderer.domElement);
+
+var scene=new THREE.Scene();
+var camera=new THREE.PerspectiveCamera(45,1,0.1,400);
+camera.up.set(0,0,1);
+camera.position.set(0,-16,14);
+
+var controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;
+controls.dampingFactor=0.08;
+controls.rotateSpeed=0.75;
+controls.zoomSpeed=0.9;
+controls.panSpeed=0.8;
+controls.minDistance=6;
+controls.maxDistance=70;
+controls.maxPolarAngle=Math.PI*0.58;
+controls.autoRotateSpeed=1.4;
+controls.target.set(0,0,0);
+
+scene.add(new THREE.AmbientLight(0xaab4ff,0.6));
+scene.add(new THREE.HemisphereLight(0xc7d2fe,0x1e1b4b,0.5));
+var sun=new THREE.DirectionalLight(0xffffff,1.0);
+sun.position.set(-8,-10,18);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-16;
+sun.shadow.camera.right=16;
+sun.shadow.camera.top=16;
+sun.shadow.camera.bottom=-16;
+sun.shadow.camera.near=1;
+sun.shadow.camera.far=60;
+sun.shadow.bias=-0.0004;
+sun.shadow.radius=4;
+scene.add(sun);
+var rimLight=new THREE.PointLight(0xf43f5e,0.9,45);
+rimLight.position.set(11,9,6);
+scene.add(rimLight);
+var fillLight=new THREE.PointLight(0x22d3ee,0.7,45);
+fillLight.position.set(-11,-9,5);
+scene.add(fillLight);
+
+var starGeo=new THREE.BufferGeometry();
+var starPos=new Float32Array(900*3);
+for(var si=0;si<900;si++){
+  var rr0=70+Math.random()*90,th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1);
+  starPos[si*3]=rr0*Math.sin(ph)*Math.cos(th);
+  starPos[si*3+1]=rr0*Math.sin(ph)*Math.sin(th);
+  starPos[si*3+2]=rr0*Math.cos(ph);
+}
+starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));
+var stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xc7d2fe,size:0.55,transparent:true,opacity:0.7,sizeAttenuation:true,depthWrite:false}));
+scene.add(stars);
+
+var board=new THREE.Group();
+scene.add(board);
+var freeGroup=new THREE.Group();
+scene.add(freeGroup);
+var exGroup=new THREE.Group();
+exGroup.visible=false;
+scene.add(exGroup);
+
+var pickPlane=new THREE.Mesh(new THREE.PlaneGeometry(80,80),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+scene.add(pickPlane);
+
+var hover=new THREE.Mesh(new THREE.RingGeometry(0.3,0.44,40),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}));
+hover.position.z=0.05;
+hover.visible=false;
+scene.add(hover);
+
+var maxVal=10;
+var k=1;
+var FREE_MAX=10;
+var mode='learn';
+var originMesh=null;
+var growing=[];
+var camAnim=null;
+var hsOn=true;
+
+function clamp(v,m){return Math.max(-m,Math.min(m,v));}
+
+function disposeTree(o){
+  o.traverse(function(c){
+    if(c.geometry)c.geometry.dispose();
+    if(c.material){
+      var ms=Array.isArray(c.material)?c.material:[c.material];
+      ms.forEach(function(m){if(m.map)m.map.dispose();m.dispose();});
+    }
+  });
+}
+function clearGroup(g){
+  while(g.children.length){
+    var c=g.children[0];
+    g.remove(c);
+    disposeTree(c);
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function labelTexture(text,opt){
+  var o=Object.assign({size:56,color:'#e2e8f0',weight:600,bg:null,border:null,padX:22,padY:12,radius:26},opt||{});
+  var c=document.createElement('canvas');
+  var ctx=c.getContext('2d');
+  var font=o.weight+' '+o.size+'px Prompt, sans-serif';
+  ctx.font=font;
+  var tw=Math.ceil(ctx.measureText(text).width);
+  c.width=tw+o.padX*2;
+  c.height=o.size+o.padY*2;
+  ctx.font=font;
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  if(o.bg){
+    roundRect(ctx,2,2,c.width-4,c.height-4,o.radius);
+    ctx.fillStyle=o.bg;
+    ctx.fill();
+    if(o.border){ctx.lineWidth=3;ctx.strokeStyle=o.border;ctx.stroke();}
+  }
+  ctx.fillStyle=o.color;
+  ctx.fillText(text,c.width/2,c.height/2+o.size*0.05);
+  var t=new THREE.CanvasTexture(c);
+  t.encoding=THREE.sRGBEncoding;
+  t.anisotropy=4;
+  t.minFilter=THREE.LinearFilter;
+  return {texture:t,aspect:c.width/c.height};
+}
+
+function makeSprite(text,height,opt){
+  var r=labelTexture(text,opt);
+  var m=new THREE.SpriteMaterial({map:r.texture,transparent:true,depthTest:false,toneMapped:false});
+  var s=new THREE.Sprite(m);
+  s.scale.set(height*r.aspect,height,1);
+  s.renderOrder=20;
+  return s;
+}
+function setSpriteText(s,text,height,opt){
+  var r=labelTexture(text,opt);
+  if(s.material.map)s.material.map.dispose();
+  s.material.map=r.texture;
+  s.material.needsUpdate=true;
+  s.scale.set(height*r.aspect,height,1);
+}
+function makeFlat(text,height,opt){
+  var r=labelTexture(text,opt);
+  var m=new THREE.MeshBasicMaterial({map:r.texture,transparent:true,depthWrite:false,toneMapped:false});
+  var mesh=new THREE.Mesh(new THREE.PlaneGeometry(height*r.aspect,height),m);
+  return mesh;
+}
+
+var labelStyle={size:56,color:'#ffffff',bg:'rgba(18,16,60,0.88)',border:'rgba(251,113,133,0.9)'};
+var valStyleX={size:48,color:'#fecdd3',bg:'rgba(18,16,60,0.8)',border:'rgba(251,113,133,0.6)'};
+var valStyleY={size:48,color:'#a5f3fc',bg:'rgba(18,16,60,0.8)',border:'rgba(34,211,238,0.6)'};
+var smallStyle={size:48,color:'#dbeafe',bg:'rgba(18,16,60,0.85)',border:'rgba(96,165,250,0.8)'};
+var solStyle={size:48,color:'#ffe4e6',bg:'rgba(80,12,40,0.88)',border:'rgba(244,63,94,0.9)'};
+
+function makePin(hex,r){
+  var g=new THREE.Group();
+  var base=0.35+r;
+  var mat=new THREE.MeshStandardMaterial({color:hex,emissive:hex,emissiveIntensity:0.35,roughness:0.25,metalness:0.15});
+  var ball=new THREE.Mesh(new THREE.SphereGeometry(r,32,24),mat);
+  ball.position.z=base;
+  ball.castShadow=true;
+  var stem=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,base,8),mat);
+  stem.rotation.x=Math.PI/2;
+  stem.position.z=base/2;
+  stem.castShadow=true;
+  var ringMat=new THREE.MeshBasicMaterial({color:hex,transparent:true,opacity:0.55,side:THREE.DoubleSide,depthWrite:false});
+  var ring=new THREE.Mesh(new THREE.RingGeometry(r*0.9,r*1.25,40),ringMat);
+  ring.position.z=0.03;
+  g.add(stem);
+  g.add(ball);
+  g.add(ring);
+  g.userData={ball:ball,ring:ring,mat:mat,ringMat:ringMat,base:base,r:r};
+  return g;
+}
+function setPinColor(pin,hex){
+  pin.userData.mat.color.setHex(hex);
+  pin.userData.mat.emissive.setHex(hex);
+  pin.userData.ringMat.color.setHex(hex);
+}
+
+function rebuildBoard(m){
+  maxVal=m;
+  k=10/m;
+  clearGroup(board);
+  originMesh=null;
+  var S=10;
+
+  var slab=new THREE.Mesh(new THREE.BoxGeometry(2*S+2.4,2*S+2.4,0.6),new THREE.MeshStandardMaterial({color:0x151a45,roughness:0.55,metalness:0.35}));
+  slab.position.z=-0.33;
+  slab.receiveShadow=true;
+  board.add(slab);
+
+  var qCols=[0xf43f5e,0xa78bfa,0x22d3ee,0xfbbf24];
+  var qCent=[[1,1],[-1,1],[-1,-1],[1,-1]];
+  qCent.forEach(function(c,i){
+    var t=new THREE.Mesh(new THREE.PlaneGeometry(S,S),new THREE.MeshStandardMaterial({color:qCols[i],transparent:true,opacity:0.2,roughness:0.8,depthWrite:false}));
+    t.position.set(c[0]*S/2,c[1]*S/2,0.005);
+    t.receiveShadow=true;
+    board.add(t);
+  });
+
+  var gp=[];
+  for(var i=-m;i<=m;i++){
+    if(i===0)continue;
+    gp.push(i*k,-S,0.02,i*k,S,0.02);
+    gp.push(-S,i*k,0.02,S,i*k,0.02);
+  }
+  var gg=new THREE.BufferGeometry();
+  gg.setAttribute('position',new THREE.Float32BufferAttribute(gp,3));
+  board.add(new THREE.LineSegments(gg,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.1,depthWrite:false})));
+
+  var bg=new THREE.BufferGeometry();
+  bg.setAttribute('position',new THREE.Float32BufferAttribute([-S,-S,0.025,S,-S,0.025,S,S,0.025,-S,S,0.025],3));
+  board.add(new THREE.LineLoop(bg,new THREE.LineBasicMaterial({color:0xfb7185,transparent:true,opacity:0.65})));
+
+  var axMatX=new THREE.MeshStandardMaterial({color:0xfb7185,emissive:0xfb7185,emissiveIntensity:0.45,roughness:0.35});
+  var axMatY=new THREE.MeshStandardMaterial({color:0x22d3ee,emissive:0x22d3ee,emissiveIntensity:0.45,roughness:0.35});
+  var L=2*S+1;
+  var ax=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,L,12),axMatX);
+  ax.rotation.z=Math.PI/2;
+  ax.position.z=0.04;
+  ax.castShadow=true;
+  board.add(ax);
+  var ay=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,L,12),axMatY);
+  ay.position.z=0.04;
+  ay.castShadow=true;
+  board.add(ay);
+  var cx=new THREE.Mesh(new THREE.ConeGeometry(0.17,0.55,20),axMatX);
+  cx.rotation.z=-Math.PI/2;
+  cx.position.set(S+0.8,0,0.04);
+  board.add(cx);
+  var cy=new THREE.Mesh(new THREE.ConeGeometry(0.17,0.55,20),axMatY);
+  cy.position.set(0,S+0.8,0.04);
+  board.add(cy);
+
+  var lx=makeSprite('แกน X',0.8,{size:52,color:'#fecdd3'});
+  lx.position.set(S+1.9,0,0.3);
+  board.add(lx);
+  var ly=makeSprite('แกน Y',0.8,{size:52,color:'#a5f3fc'});
+  ly.position.set(0,S+1.8,0.3);
+  board.add(ly);
+
+  var step=m>15?5:(m>=10?2:1);
+  for(var j=-m;j<=m;j++){
+    if(j===0||j%step!==0)continue;
+    var tx=makeSprite(String(j),0.55,{size:44,color:'#b6bdea',padX:8,padY:4});
+    tx.position.set(j*k,-0.75,0.05);
+    board.add(tx);
+    var ty=makeSprite(String(j),0.55,{size:44,color:'#b6bdea',padX:8,padY:4});
+    ty.position.set(-0.8,j*k,0.05);
+    board.add(ty);
+  }
+  var o0=makeSprite('O',0.7,{size:48,color:'#fde68a'});
+  o0.position.set(-0.7,-0.7,0.05);
+  board.add(o0);
+
+  var qNames=['จตุภาคที่ 1','จตุภาคที่ 2','จตุภาคที่ 3','จตุภาคที่ 4'];
+  var qSigns=['(+, +)','(-, +)','(-, -)','(+, -)'];
+  qCent.forEach(function(c,i){
+    var a=makeFlat(qNames[i],0.95,{size:60,color:'rgba(255,255,255,0.3)'});
+    a.position.set(c[0]*S*0.62,c[1]*S*0.62+0.4,0.03);
+    board.add(a);
+    var b=makeFlat(qSigns[i],0.7,{size:52,color:'rgba(255,255,255,0.22)'});
+    b.position.set(c[0]*S*0.62,c[1]*S*0.62-0.5,0.03);
+    board.add(b);
+  });
+
+  originMesh=new THREE.Mesh(new THREE.OctahedronGeometry(0.28,0),new THREE.MeshStandardMaterial({color:0xfbbf24,emissive:0xfbbf24,emissiveIntensity:0.6,roughness:0.2,metalness:0.4}));
+  originMesh.position.set(0,0,0.5);
+  originMesh.castShadow=true;
+  board.add(originMesh);
+}
+
+function makeDashed(hex){
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(6,3));
+  var l=new THREE.Line(g,new THREE.LineDashedMaterial({color:hex,dashSize:0.28,gapSize:0.2,transparent:true,opacity:0.95,depthWrite:false}));
+  l.frustumCulled=false;
+  l.computeLineDistances();
+  return l;
+}
+function setLine(l,a){
+  var arr=l.geometry.attributes.position.array;
+  for(var i=0;i<6;i++)arr[i]=a[i];
+  l.geometry.attributes.position.needsUpdate=true;
+  l.computeLineDistances();
+}
+
+var free={x:-4,y:5};
+var freeShow=true;
+var freeCur=new THREE.Vector3(-4,5,0);
+var freeTar=new THREE.Vector3(-4,5,0);
+
+var freePin=makePin(0xf43f5e,0.4);
+freeGroup.add(freePin);
+var freeLabel=makeSprite('P(-4, 5)',0.85,labelStyle);
+freeGroup.add(freeLabel);
+var dashH=makeDashed(0xfb7185);
+var dashV=makeDashed(0x22d3ee);
+freeGroup.add(dashH);
+freeGroup.add(dashV);
+var dotX=new THREE.Mesh(new THREE.SphereGeometry(0.17,20,16),new THREE.MeshStandardMaterial({color:0xfb7185,emissive:0xfb7185,emissiveIntensity:0.6}));
+var dotY=new THREE.Mesh(new THREE.SphereGeometry(0.17,20,16),new THREE.MeshStandardMaterial({color:0x22d3ee,emissive:0x22d3ee,emissiveIntensity:0.6}));
+freeGroup.add(dotX);
+freeGroup.add(dotY);
+var valX=makeSprite('x = -4',0.6,valStyleX);
+var valY=makeSprite('y = 5',0.6,valStyleY);
+freeGroup.add(valX);
+freeGroup.add(valY);
+
+function quadInfo(x,y){
+  if(x===0&&y===0)return {t:'จุดกำเนิด (Origin)',c:'#fde68a'};
+  if(y===0)return {t:'อยู่บนแกน X (y = 0)',c:'#fecdd3'};
+  if(x===0)return {t:'อยู่บนแกน Y (x = 0)',c:'#a5f3fc'};
+  if(x>0&&y>0)return {t:'จตุภาคที่ 1 (+, +)',c:'#fda4af'};
+  if(x<0&&y>0)return {t:'จตุภาคที่ 2 (-, +)',c:'#ddd6fe'};
+  if(x<0&&y<0)return {t:'จตุภาคที่ 3 (-, -)',c:'#a5f3fc'};
+  return {t:'จตุภาคที่ 4 (+, -)',c:'#fde68a'};
+}
+
+var svgEyeOpen='<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>';
+var svgEyeClosed='<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>';
+
+function refreshFreeText(){
+  setSpriteText(freeLabel,freeShow?'P('+free.x+', '+free.y+')':'P(?, ?)',0.85,labelStyle);
+  setSpriteText(valX,'x = '+free.x,0.6,valStyleX);
+  setSpriteText(valY,'y = '+free.y,0.6,valStyleY);
+  dashH.visible=dashV.visible=dotX.visible=dotY.visible=valX.visible=valY.visible=freeShow;
+}
+function refreshFreeUI(){
+  var cv=$('coordVal'),qb=$('quadBadge');
+  if(freeShow){
+    cv.textContent='('+free.x+', '+free.y+')';
+    cv.classList.remove('q');
+    var q=quadInfo(free.x,free.y);
+    qb.textContent=q.t;
+    qb.style.color=q.c;
+  }else{
+    cv.textContent='(?, ?)';
+    cv.classList.add('q');
+    qb.textContent='ลองทายพิกัดของ P จากกราฟก่อน';
+    qb.style.color='#a3acd9';
+  }
+  $('xOut').textContent=free.x;
+  $('yOut').textContent=free.y;
+  $('xRange').value=free.x;
+  $('yRange').value=free.y;
+  $('eyeSvg').innerHTML=freeShow?svgEyeOpen:svgEyeClosed;
+  $('eyeBtn').classList.toggle('off',!freeShow);
+}
+function setFreePoint(x,y,anim){
+  free.x=clamp(Math.round(x)+0,FREE_MAX);
+  free.y=clamp(Math.round(y)+0,FREE_MAX);
+  freeTar.set(free.x*k,free.y*k,0);
+  if(anim===false)freeCur.copy(freeTar);
+  refreshFreeText();
+  refreshFreeUI();
+}
+
+function updateFreeVisual(t){
+  freeCur.lerp(freeTar,0.2);
+  if(freeCur.distanceTo(freeTar)<0.002)freeCur.copy(freeTar);
+  var cx=freeCur.x,cy=freeCur.y;
+  freePin.position.set(cx,cy,0);
+  var u=freePin.userData;
+  u.ball.position.z=u.base+Math.sin(t*2.2)*0.06;
+  var s=1+Math.sin(t*3)*0.08;
+  u.ring.scale.set(s,s,1);
+  freeLabel.position.set(cx,cy,u.base+u.r+0.95);
+  if(freeShow){
+    setLine(dashH,[cx,cy,0.06,0,cy,0.06]);
+    setLine(dashV,[cx,cy,0.06,cx,0,0.06]);
+    dotX.position.set(cx,0,0.1);
+    dotY.position.set(0,cy,0.1);
+    valX.position.set(cx,cy>=0?-1.35:1.35,0.1);
+    valY.position.set(cx>=0?-1.9:1.9,cy,0.1);
+  }
+}
+
+var exercises=[
+  {eq:'2x - 3y = 6',x:[-6,-3,0,3,6],y:[-6,-4,-2,0,2],gx:[1,3,5],gy:[2,4]},
+  {eq:'y = 2x - 3',x:[-1,0,1,2,3],y:[-5,-3,-1,1,3],gx:[2,4,5],gy:[1,3]},
+  {eq:'x - y = 7',x:[0,2,5,7,9],y:[-7,-5,-2,0,2],gx:[1,2,3,5],gy:[4]},
+  {eq:'3x = 2y',x:[-4,-2,0,2,4],y:[-6,-3,0,3,6],gx:[3],gy:[1,2,4,5]},
+  {eq:'x - y = 0',x:[-4,-2,0,2,4],y:[-4,-2,0,2,4],gx:[1,3,4,5],gy:[2]},
+  {eq:'3x + 2y = 6',x:[-2,0,2,4,6],y:[6,3,0,-3,-6],gx:[1,4,5],gy:[2,3]},
+  {eq:'y = 2x - 3',x:[-2,-1,0,4,5],y:[-7,-5,-3,5,7],gx:[2,3,5],gy:[1,4]},
+  {eq:'5x + 2y = 8',x:[-2,0,2,4,6],y:[9,4,-1,-6,-11],gx:[1,3,5],gy:[2,4]},
+  {eq:'x - 4y + 1 = 0',x:[-7,-3,1,5,9],y:[-2,-1,0,1,2],gx:[4],gy:[1,2,4,5]},
+  {eq:'2x + y = 4',x:[-2,0,2,4,6],y:[8,4,0,-4,-8],gx:[1,4,5],gy:[2,3]}
+];
+var exIdx=0,exRevealed=false,exMax=10,userPts=[],solObjs=[];
+
+function exMaxFor(ex){
+  var m=0;
+  ex.x.forEach(function(v){m=Math.max(m,Math.abs(v));});
+  ex.y.forEach(function(v){m=Math.max(m,Math.abs(v));});
+  var r=Math.ceil(m/5)*5;
+  return r<10?10:r;
+}
+
+function createUserObj(p,anim){
+  var g=new THREE.Group();
+  var pin=makePin(p.ok===true?0x34d399:(p.ok===false?0xfbbf24:0x60a5fa),0.3);
+  g.add(pin);
+  var lb=makeSprite('('+p.x+', '+p.y+')',0.6,smallStyle);
+  lb.position.set(0,0,pin.userData.base+pin.userData.r+0.65);
+  g.add(lb);
+  g.position.set(p.x*k,p.y*k,0);
+  g.userData.pin=pin;
+  if(anim){
+    g.scale.setScalar(0.01);
+    g.userData.grow=0;
+    growing.push(g);
+  }
+  p.obj=g;
+  exGroup.add(g);
+}
+
+function lineEnds(ex){
+  var m=(ex.y[1]-ex.y[0])/(ex.x[1]-ex.x[0]);
+  var c=ex.y[0]-m*ex.x[0];
+  var lo=-exMax,hi=exMax;
+  if(m!==0){
+    var a=(-exMax-c)/m,b=(exMax-c)/m;
+    lo=Math.max(lo,Math.min(a,b));
+    hi=Math.min(hi,Math.max(a,b));
+  }
+  return [{x:lo,y:m*lo+c},{x:hi,y:m*hi+c}];
+}
+
+function addSolution(anim){
+  var ex=exercises[exIdx];
+  var e=lineEnds(ex);
+  var a=new THREE.Vector3(e[0].x*k,e[0].y*k,0.08);
+  var b=new THREE.Vector3(e[1].x*k,e[1].y*k,0.08);
+  var dir=b.clone().sub(a);
+  var len=dir.length();
+  dir.normalize();
+  var pivot=new THREE.Group();
+  pivot.position.copy(a);
+  pivot.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+  var cyl=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,len,12),new THREE.MeshStandardMaterial({color:0xf43f5e,emissive:0xf43f5e,emissiveIntensity:0.65,roughness:0.3,transparent:true,opacity:0.85}));
+  cyl.position.y=len/2;
+  cyl.castShadow=true;
+  pivot.add(cyl);
+  if(anim){
+    pivot.scale.y=0.001;
+    pivot.userData.lineGrow=0;
+    growing.push(pivot);
+  }
+  exGroup.add(pivot);
+  solObjs.push(pivot);
+  for(var i=0;i<5;i++){
+    var g=new THREE.Group();
+    var pin=makePin(0xf43f5e,0.38);
+    g.add(pin);
+    var lb=makeSprite('('+ex.x[i]+', '+ex.y[i]+')',0.6,solStyle);
+    lb.position.set(0,0,pin.userData.base+pin.userData.r+0.65);
+    g.add(lb);
+    g.position.set(ex.x[i]*k,ex.y[i]*k,0);
+    if(anim){
+      g.scale.setScalar(0.01);
+      g.userData.grow=-i*0.12;
+      growing.push(g);
+    }
+    exGroup.add(g);
+    solObjs.push(g);
+  }
+}
+
+function redrawEx(){
+  clearGroup(exGroup);
+  growing=[];
+  solObjs=[];
+  userPts.forEach(function(p){createUserObj(p,false);});
+  if(exRevealed)addSolution(false);
+}
+
+function updateCount(){
+  $('exCount').textContent='พล็อตแล้ว '+userPts.length+'/5 จุด';
+}
+
+function buildExTable(){
+  var ex=exercises[exIdx];
+  $('exEq').textContent=ex.eq;
+  var rx=$('rowX'),ry=$('rowY');
+  rx.innerHTML='';
+  ry.innerHTML='';
+  for(var i=0;i<5;i++){
+    rx.insertAdjacentHTML('beforeend',ex.gx.indexOf(i+1)>-1?'<div class="val-box">'+ex.x[i]+'</div>':'<input type="number" inputmode="numeric" class="math-input" data-axis="x" data-idx="'+i+'">');
+    ry.insertAdjacentHTML('beforeend',ex.gy.indexOf(i+1)>-1?'<div class="val-box">'+ex.y[i]+'</div>':'<input type="number" inputmode="numeric" class="math-input" data-axis="y" data-idx="'+i+'">');
+  }
+}
+
+function loadExercise(i){
+  exIdx=parseInt(i,10);
+  exRevealed=false;
+  userPts=[];
+  $('exFb').innerHTML='';
+  buildExTable();
+  updateCount();
+  exMax=exMaxFor(exercises[exIdx]);
+  if(mode==='exercise'){
+    if(exMax!==maxVal)rebuildBoard(exMax);
+    redrawEx();
+  }
+}
+
+function toggleUserPoint(p){
+  if(exRevealed)return;
+  var idx=-1;
+  for(var i=0;i<userPts.length;i++){if(userPts[i].x===p.x&&userPts[i].y===p.y){idx=i;break;}}
+  if(idx>-1){
+    var o=userPts[idx].obj;
+    exGroup.remove(o);
+    disposeTree(o);
+    growing=growing.filter(function(g){return g!==o;});
+    userPts.splice(idx,1);
+  }else{
+    var np={x:p.x,y:p.y,ok:null,obj:null};
+    userPts.push(np);
+    createUserObj(np,true);
+  }
+  updateCount();
+}
+
+function showFb(cls,txt){
+  $('exFb').innerHTML='<div class="fb '+cls+'">'+txt+'</div>';
+}
+
+function checkExercise(){
+  if(exRevealed)return;
+  var ex=exercises[exIdx];
+  var inputs=Array.prototype.slice.call(document.querySelectorAll('#tab-exercise .math-input'));
+  var allCorrect=true,correctCount=0;
+  inputs.forEach(function(input){
+    var axis=input.dataset.axis,idx=parseInt(input.dataset.idx,10);
+    var val=parseFloat(input.value);
+    var expected=ex[axis][idx];
+    input.classList.remove('correct','incorrect');
+    if(!isNaN(val)&&val===expected){input.classList.add('correct');correctCount++;}
+    else{input.classList.add('incorrect');allCorrect=false;}
+  });
+  var target=ex.x.map(function(x,i){return {x:x,y:ex.y[i]};});
+  var pc=0;
+  userPts.forEach(function(up){
+    var ok=target.some(function(t){return t.x===up.x&&t.y===up.y;});
+    up.ok=ok;
+    setPinColor(up.obj.userData.pin,ok?0x34d399:0xfbbf24);
+    if(ok)pc++;
+  });
+  if(pc<5)allCorrect=false;
+  if(inputs.length===0&&userPts.length===0)return;
+  if(allCorrect&&pc===5)showFb('ok','🎉 ยอดเยี่ยม! เติมตารางและพล็อตจุดถูกต้องทั้งหมด');
+  else if(correctCount>0||pc>0)showFb('mid','👍 ตารางถูก '+correctCount+' ช่อง | กราฟถูก '+pc+' จุด');
+  else showFb('bad','💡 ยังไม่ถูก ลองพยายามใหม่นะ');
+}
+
+function revealExercise(){
+  if(exRevealed)return;
+  exRevealed=true;
+  var ex=exercises[exIdx];
+  Array.prototype.slice.call(document.querySelectorAll('#tab-exercise .math-input')).forEach(function(input){
+    var axis=input.dataset.axis,idx=parseInt(input.dataset.idx,10);
+    input.value=ex[axis][idx];
+    input.classList.remove('incorrect');
+    input.classList.add('correct');
+    input.disabled=true;
+  });
+  addSolution(true);
+  showFb('ok','เฉลยเรียบร้อยแล้ว — จุดสีชมพูและเส้นตรงคือคำตอบ');
+}
+
+function clearUserPoints(){
+  if(exRevealed)return;
+  userPts=[];
+  clearGroup(exGroup);
+  growing=[];
+  updateCount();
+  $('exFb').innerHTML='';
+}
+
+var quiz=[
+  {id:'q1',t:'แกนแนวนอนในระบบพิกัดฉากเรียกว่าอะไร?',o:[['x','แกน X'],['y','แกน Y'],['z','แกน Z'],['origin','จุดกำเนิด']],a:'x',why:'แกนแนวนอนคือแกน X ส่วนแกนแนวตั้งคือแกน Y'},
+  {id:'q2',t:'จุดกำเนิด (Origin) มีพิกัดเป็นเท่าใด?',o:[['1,1','(1, 1)'],['0,0','(0, 0)'],['-1,-1','(-1, -1)'],['0,1','(0, 1)']],a:'0,0',why:'จุดกำเนิดคือจุดที่แกน X และแกน Y ตัดกัน มีพิกัด (0, 0)'},
+  {id:'q3',t:'พิกัด (-3, 4) อยู่ในจตุภาคใด?',pt:[-3,4],o:[['q1','จตุภาคที่ 1'],['q2','จตุภาคที่ 2'],['q3','จตุภาคที่ 3'],['q4','จตุภาคที่ 4']],a:'q2',why:'x เป็นลบ (ซ้าย) และ y เป็นบวก (บน) จึงอยู่จตุภาคที่ 2'},
+  {id:'q4',t:'พิกัด (5, -2) อยู่ในจตุภาคใด?',pt:[5,-2],o:[['q1','จตุภาคที่ 1'],['q2','จตุภาคที่ 2'],['q3','จตุภาคที่ 3'],['q4','จตุภาคที่ 4']],a:'q4',why:'x เป็นบวก (ขวา) และ y เป็นลบ (ล่าง) จึงอยู่จตุภาคที่ 4'},
+  {id:'q5',t:'จุดที่อยู่บนแกน Y จะมีคุณสมบัติอย่างไรเสมอ?',o:[['y0','ค่าพิกัดหลัง (y) เป็น 0'],['x0','ค่าพิกัดหน้า (x) เป็น 0'],['xy0','ทั้ง x และ y เป็น 0'],['none','ไม่มีข้อใดถูก']],a:'x0',why:'จุดบนแกน Y อยู่ตรงกลางในแนวนอน จึงมีค่า x = 0 เสมอ เช่น (0, 3) และ (0, -5)'}
+];
+var thaiLetters=['ก','ข','ค','ง'];
+
+function renderQuiz(){
+  $('quizBox').innerHTML=quiz.map(function(q,i){
+    var opts=q.o.map(function(o,j){
+      return '<label class="opt"><input type="radio" name="'+q.id+'" value="'+o[0]+'"><span class="mk">'+thaiLetters[j]+'.</span><span>'+o[1]+'</span></label>';
+    }).join('');
+    return '<div class="q" data-q="'+q.id+'"><p class="qt"><span class="qn">'+(i+1)+'</span><span>'+q.t+'</span></p><div class="opts">'+opts+'</div>'+(q.pt?'<button class="link" data-show="'+i+'">ดูจุดบนกราฟ 3D</button>':'')+'<div class="why hidden" id="why-'+q.id+'">'+q.why+'</div></div>';
+  }).join('');
+  $('qResult').innerHTML='';
+}
+
+function checkQuiz(){
+  var score=0,answered=0;
+  Array.prototype.slice.call(document.querySelectorAll('#quizBox .opt')).forEach(function(el){el.classList.remove('ok','bad');});
+  quiz.forEach(function(q){
+    var sel=document.querySelector('#quizBox input[name="'+q.id+'"]:checked');
+    if(sel){
+      answered++;
+      var lab=sel.closest('.opt');
+      if(sel.value===q.a){score++;lab.classList.add('ok');}
+      else lab.classList.add('bad');
+    }
+  });
+  var total=quiz.length;
+  var cls=score===total?'ok':(score>2?'mid':'bad');
+  var col=score===total?'#34d399':(score>2?'#fbbf24':'#f87171');
+  var msg=score===total?'🎉 ยอดเยี่ยมมาก!':(score>2?'👍 ทำได้ดี!':'💡 พยายามอีกนิดนะ');
+  $('qResult').innerHTML='<div class="result '+cls+'"><div class="ring" style="--p:'+(score/total*100)+';--c:'+col+'"><span>'+score+'/'+total+'</span></div><div><b>'+msg+'</b><small>ตอบถูก '+score+' จาก '+total+' ข้อ'+(answered<total?' (ยังไม่ได้ตอบ '+(total-answered)+' ข้อ)':'')+'</small></div></div>';
+}
+
+function revealQuiz(){
+  quiz.forEach(function(q){
+    var r=document.querySelector('#quizBox input[name="'+q.id+'"][value="'+q.a+'"]');
+    if(r){
+      var lab=r.closest('.opt');
+      lab.classList.remove('bad');
+      lab.classList.add('ok');
+    }
+    $('why-'+q.id).classList.remove('hidden');
+  });
+  Array.prototype.slice.call(document.querySelectorAll('#quizBox input[type="radio"]')).forEach(function(r){r.disabled=true;});
+  $('qResult').innerHTML='<div class="fb ok">แสดงเฉลยข้อที่ถูกต้องแล้ว (สีเขียว)</div>';
+}
+
+var topics=[
+  {id:'origin',badge:'O',n:'จุดกำเนิด (Origin)',s:'จุด O(0, 0) ที่แกนทั้งสองตัดกัน',tag:'จุดเริ่มต้น',pos:[0,0],ex:[0,0],body:'จุดที่แกน X และแกน Y ตัดกัน มีพิกัด (0, 0) เป็นจุดเริ่มต้นของการนับทุกครั้งในระบบพิกัดฉาก',eg:'ทั้ง x และ y มีค่าเป็น 0'},
+  {id:'xaxis',badge:'X',n:'แกน X (แกนนอน)',s:'ซ้าย = ลบ ขวา = บวก',tag:'แกนนอน',pos:[8,0],ex:[6,0],body:'เป็นเส้นแนวนอน ค่า x เป็นบวกทางขวาและเป็นลบทางซ้าย จุดทุกจุดบนแกน X มีค่า y = 0 เสมอ',eg:'ตัวอย่าง: (6, 0) และ (-3, 0)'},
+  {id:'yaxis',badge:'Y',n:'แกน Y (แกนตั้ง)',s:'บน = บวก ล่าง = ลบ',tag:'แกนตั้ง',pos:[0,8],ex:[0,5],body:'เป็นเส้นแนวตั้ง ค่า y เป็นบวกด้านบนและเป็นลบด้านล่าง จุดทุกจุดบนแกน Y มีค่า x = 0 เสมอ',eg:'ตัวอย่าง: (0, 5) และ (0, -2)'},
+  {id:'q1',badge:'1',n:'จตุภาคที่ 1',s:'(+, +) ขวาบน',tag:'จตุภาค',pos:[5,5],ex:[4,3],body:'ค่า x เป็นบวกและค่า y เป็นบวก อยู่ด้านขวาบนของจุดกำเนิด',eg:'ตัวอย่าง: (4, 3)'},
+  {id:'q2',badge:'2',n:'จตุภาคที่ 2',s:'(-, +) ซ้ายบน',tag:'จตุภาค',pos:[-5,5],ex:[-4,5],body:'ค่า x เป็นลบและค่า y เป็นบวก อยู่ด้านซ้ายบนของจุดกำเนิด',eg:'ตัวอย่าง: (-4, 5)'},
+  {id:'q3',badge:'3',n:'จตุภาคที่ 3',s:'(-, -) ซ้ายล่าง',tag:'จตุภาค',pos:[-5,-5],ex:[-3,-4],body:'ค่า x เป็นลบและค่า y เป็นลบ อยู่ด้านซ้ายล่างของจุดกำเนิด',eg:'ตัวอย่าง: (-3, -4)'},
+  {id:'q4',badge:'4',n:'จตุภาคที่ 4',s:'(+, -) ขวาล่าง',tag:'จตุภาค',pos:[5,-5],ex:[5,-3],body:'ค่า x เป็นบวกและค่า y เป็นลบ อยู่ด้านขวาล่างของจุดกำเนิด',eg:'ตัวอย่าง: (5, -3)'}
+];
+var currentTopic=null;
+
+function renderTopics(){
+  $('topicList').innerHTML=topics.map(function(t){
+    return '<button class="topic" data-id="'+t.id+'"><span class="bd">'+t.badge+'</span><span><b>'+t.n+'</b><span>'+t.s+'</span></span></button>';
+  }).join('');
+}
+
+function showCard(tp){
+  var c=$('card');
+  c.classList.remove('show');
+  void c.offsetWidth;
+  $('cardTag').textContent=tp.tag;
+  $('cardTitle').textContent=tp.n;
+  $('cardBody').textContent=tp.body;
+  $('cardEg').textContent=tp.eg;
+  c.classList.add('show');
+}
+function hideCard(){
+  $('card').classList.remove('show');
+  currentTopic=null;
+  Array.prototype.slice.call(document.querySelectorAll('.topic')).forEach(function(b){b.classList.remove('active');});
+}
+
+function homePos(){
+  var a=camera.aspect||1.5;
+  var m=Math.min(1.9,Math.max(1,1.25/a));
+  return new THREE.Vector3(0,-16*m,14*m);
+}
+function flyTo(pos,tar,dur){
+  camAnim={p0:camera.position.clone(),p1:pos.clone(),t0:controls.target.clone(),t1:tar.clone(),s:performance.now(),d:dur||900};
+}
+
+function focusTopic(id){
+  var tp=null;
+  for(var i=0;i<topics.length;i++){if(topics[i].id===id)tp=topics[i];}
+  if(!tp)return;
+  currentTopic=tp;
+  showCard(tp);
+  Array.prototype.slice.call(document.querySelectorAll('.topic')).forEach(function(b){b.classList.toggle('active',b.dataset.id===id);});
+  var m=Math.min(1.7,Math.max(1,1.25/(camera.aspect||1.5)));
+  var tar=id==='origin'?new THREE.Vector3(0,0,0):new THREE.Vector3(tp.pos[0]*0.8,tp.pos[1]*0.8,0);
+  var off=id==='origin'?new THREE.Vector3(0,-11*m,10*m):new THREE.Vector3(0,-14*m,12.5*m);
+  flyTo(tar.clone().add(off),tar,950);
+}
+
+var hsEl=$('hotspots');
+var hsList=topics.map(function(tp){
+  var b=document.createElement('button');
+  b.className='hs';
+  b.dataset.t=tp.n;
+  b.textContent=tp.badge;
+  b.addEventListener('click',function(){focusTopic(tp.id);});
+  hsEl.appendChild(b);
+  return {el:b,v:new THREE.Vector3(tp.pos[0],tp.pos[1],0.7)};
+});
+var tmpV=new THREE.Vector3();
+var stageW=1,stageH=1;
+
+function updateHotspots(){
+  var vis=hsOn&&(mode==='learn'||mode==='free');
+  hsEl.style.display=vis?'block':'none';
+  if(!vis)return;
+  hsList.forEach(function(h){
+    tmpV.copy(h.v).project(camera);
+    if(tmpV.z>1||tmpV.z<-1){h.el.style.display='none';return;}
+    h.el.style.display='grid';
+    h.el.style.left=((tmpV.x*0.5+0.5)*stageW)+'px';
+    h.el.style.top=((-tmpV.y*0.5+0.5)*stageH)+'px';
+  });
+}
+
+var ray=new THREE.Raycaster();
+var ndc=new THREE.Vector2();
+
+function pick(e){
+  var r=renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  var h=ray.intersectObject(pickPlane,false)[0];
+  if(!h)return null;
+  var fx=h.point.x/k,fy=h.point.y/k;
+  if(Math.abs(fx)>maxVal+0.6||Math.abs(fy)>maxVal+0.6)return null;
+  return {x:clamp(Math.round(fx),maxVal)+0,y:clamp(Math.round(fy),maxVal)+0};
+}
+
+var dom=renderer.domElement;
+var pCount=0,downInfo=null;
+dom.addEventListener('pointerdown',function(e){
+  pCount++;
+  downInfo=pCount===1?{x:e.clientX,y:e.clientY,t:performance.now()}:null;
+});
+function pointerEnd(e,cancel){
+  pCount=Math.max(0,pCount-1);
+  if(!cancel&&downInfo&&pCount===0){
+    var dx=e.clientX-downInfo.x,dy=e.clientY-downInfo.y;
+    if(Math.sqrt(dx*dx+dy*dy)<6&&performance.now()-downInfo.t<600){
+      var p=pick(e);
+      if(p){
+        if(mode==='exercise')toggleUserPoint(p);
+        else setFreePoint(p.x,p.y,true);
+      }
+    }
+  }
+  if(pCount===0)downInfo=null;
+}
+dom.addEventListener('pointerup',function(e){pointerEnd(e,false);});
+dom.addEventListener('pointercancel',function(e){pointerEnd(e,true);});
+dom.addEventListener('pointermove',function(e){
+  if(e.buttons)return;
+  var p=pick(e);
+  var rd=$('hoverRead');
+  if(p){
+    rd.textContent='x: '+p.x+'   y: '+p.y;
+    var plot=mode==='free'||mode==='learn'||mode==='quiz'||(mode==='exercise'&&!exRevealed);
+    hover.visible=plot;
+    hover.position.set(p.x*k,p.y*k,0.05);
+    dom.classList.toggle('plot',plot);
+  }else{
+    rd.textContent='x: –   y: –';
+    hover.visible=false;
+    dom.classList.remove('plot');
+  }
+});
+dom.addEventListener('pointerleave',function(){
+  hover.visible=false;
+  $('hoverRead').textContent='x: –   y: –';
+});
+
+controls.addEventListener('start',function(){
+  camAnim=null;
+  $('hint').classList.add('faded');
+});
+
+function setMode(m){
+  mode=m;
+  var need=m==='exercise'?exMax:FREE_MAX;
+  if(need!==maxVal)rebuildBoard(need);
+  freeGroup.visible=m!=='exercise';
+  exGroup.visible=m==='exercise';
+  if(m==='exercise')redrawEx();
+  else{freeTar.set(free.x*k,free.y*k,0);freeCur.copy(freeTar);}
+  if(m!=='learn'&&m!=='free')hideCard();
+  hover.visible=false;
+}
+
+function setTab(name){
+  Array.prototype.slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.classList.add('hidden');});
+  var el=$('tab-'+name);
+  el.classList.remove('hidden');
+  Array.prototype.slice.call(document.querySelectorAll('#tabs button')).forEach(function(b){b.classList.toggle('active',b.dataset.tab===name);});
+  $('panelBody').scrollTop=0;
+  setMode(name);
+}
+
+$('tabs').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-tab]');
+  if(b)setTab(b.dataset.tab);
+});
+$('topicList').addEventListener('click',function(e){
+  var b=e.target.closest('.topic');
+  if(b)focusTopic(b.dataset.id);
+});
+$('cardClose').addEventListener('click',hideCard);
+$('cardAct').addEventListener('click',function(){
+  if(currentTopic)setFreePoint(currentTopic.ex[0],currentTopic.ex[1],true);
+});
+
+$('btnHome').addEventListener('click',function(){flyTo(homePos(),new THREE.Vector3(0,0,0),900);});
+$('btnTop').addEventListener('click',function(){
+  var a=camera.aspect||1.5;
+  var d=Math.max(27,27/a);
+  flyTo(new THREE.Vector3(0,-0.01,d),new THREE.Vector3(0,0,0),900);
+});
+$('btnSpin').addEventListener('click',function(){
+  controls.autoRotate=!controls.autoRotate;
+  this.classList.toggle('on',controls.autoRotate);
+});
+$('btnHs').addEventListener('click',function(){
+  hsOn=!hsOn;
+  this.classList.toggle('on',hsOn);
+});
+
+$('eyeBtn').addEventListener('click',function(){
+  freeShow=!freeShow;
+  refreshFreeText();
+  refreshFreeUI();
+});
+$('xRange').addEventListener('input',function(){setFreePoint(parseInt(this.value,10),free.y,true);});
+$('yRange').addEventListener('input',function(){setFreePoint(free.x,parseInt(this.value,10),true);});
+$('xMinus').addEventListener('click',function(){setFreePoint(free.x-1,free.y,true);});
+$('xPlus').addEventListener('click',function(){setFreePoint(free.x+1,free.y,true);});
+$('yMinus').addEventListener('click',function(){setFreePoint(free.x,free.y-1,true);});
+$('yPlus').addEventListener('click',function(){setFreePoint(free.x,free.y+1,true);});
+
+var quick=[[-4,5],[3,2],[-2,-6],[5,-3],[0,4],[6,0],[0,0],[-7,-7]];
+$('quick').innerHTML=quick.map(function(q){return '<button class="qchip" data-x="'+q[0]+'" data-y="'+q[1]+'">('+q[0]+', '+q[1]+')</button>';}).join('');
+$('quick').addEventListener('click',function(e){
+  var b=e.target.closest('.qchip');
+  if(b)setFreePoint(parseInt(b.dataset.x,10),parseInt(b.dataset.y,10),true);
+});
+
+window.addEventListener('keydown',function(e){
+  if(mode!=='free')return;
+  var tg=document.activeElement&&document.activeElement.tagName;
+  if(tg==='INPUT'||tg==='SELECT'||tg==='TEXTAREA')return;
+  if(e.key==='ArrowLeft'){setFreePoint(free.x-1,free.y,true);e.preventDefault();}
+  else if(e.key==='ArrowRight'){setFreePoint(free.x+1,free.y,true);e.preventDefault();}
+  else if(e.key==='ArrowUp'){setFreePoint(free.x,free.y+1,true);e.preventDefault();}
+  else if(e.key==='ArrowDown'){setFreePoint(free.x,free.y-1,true);e.preventDefault();}
+});
+
+$('exSelect').innerHTML=exercises.map(function(ex,i){return '<option value="'+i+'">'+(i+1)+') '+ex.eq+'</option>';}).join('');
+$('exSelect').addEventListener('change',function(){loadExercise(this.value);});
+$('exCheck').addEventListener('click',checkExercise);
+$('exReveal').addEventListener('click',revealExercise);
+$('exClear').addEventListener('click',clearUserPoints);
+
+$('qCheck').addEventListener('click',checkQuiz);
+$('qReveal').addEventListener('click',revealQuiz);
+$('qReset').addEventListener('click',renderQuiz);
+$('quizBox').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-show]');
+  if(!b)return;
+  var q=quiz[parseInt(b.dataset.show,10)];
+  setFreePoint(q.pt[0],q.pt[1],true);
+  var a=camera.aspect||1.5;
+  flyTo(new THREE.Vector3(0,-0.01,Math.max(27,27/a)),new THREE.Vector3(0,0,0),900);
+});
+
+function resize(){
+  var r=$('stage').getBoundingClientRect();
+  stageW=Math.max(1,r.width);
+  stageH=Math.max(1,r.height);
+  renderer.setSize(stageW,stageH);
+  camera.aspect=stageW/stageH;
+  camera.updateProjectionMatrix();
+}
+if(window.ResizeObserver)new ResizeObserver(resize).observe($('stage'));
+window.addEventListener('resize',resize);
+
+function easeOutBack(t){
+  var c1=1.70158,c3=c1+1;
+  return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2);
+}
+
+var clock=new THREE.Clock();
+function tick(){
+  requestAnimationFrame(tick);
+  var dt=Math.min(clock.getDelta(),0.05);
+  var t=clock.elapsedTime;
+
+  if(camAnim){
+    var u=Math.min(1,(performance.now()-camAnim.s)/camAnim.d);
+    var e=u<0.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+    camera.position.lerpVectors(camAnim.p0,camAnim.p1,e);
+    controls.target.lerpVectors(camAnim.t0,camAnim.t1,e);
+    if(u>=1)camAnim=null;
+  }
+
+  if(originMesh){
+    originMesh.rotation.z+=dt*1.2;
+    originMesh.position.z=0.5+Math.sin(t*2)*0.08;
+  }
+  stars.rotation.z+=dt*0.008;
+  rimLight.position.x=11*Math.cos(t*0.25);
+  rimLight.position.y=11*Math.sin(t*0.25);
+
+  if(freeGroup.visible)updateFreeVisual(t);
+
+  if(growing.length){
+    for(var i=growing.length-1;i>=0;i--){
+      var g=growing[i];
+      if(g.userData.lineGrow!==undefined){
+        g.userData.lineGrow=Math.min(1,g.userData.lineGrow+dt*1.6);
+        g.scale.y=Math.max(0.001,g.userData.lineGrow);
+        if(g.userData.lineGrow>=1)growing.splice(i,1);
+      }else{
+        g.userData.grow+=dt*3.2;
+        var gv=Math.max(0,Math.min(1,g.userData.grow));
+        g.scale.setScalar(Math.max(0.01,easeOutBack(gv)));
+        if(g.userData.grow>=1){g.scale.setScalar(1);growing.splice(i,1);}
+      }
+    }
+  }
+
+  controls.update();
+  renderer.render(scene,camera);
+  updateHotspots();
+}
+
+rebuildBoard(FREE_MAX);
+renderTopics();
+renderQuiz();
+loadExercise(0);
+resize();
+camera.position.copy(homePos());
+controls.update();
+setFreePoint(-4,5,false);
+tick();
+
+if(document.fonts&&document.fonts.load){
+  document.fonts.load('600 40px Prompt').then(function(){return document.fonts.ready;}).then(function(){
+    rebuildBoard(maxVal);
+    refreshFreeText();
+    if(mode==='exercise')redrawEx();
+  });
+}
+})();
+</script>
+</body>
+</html>
